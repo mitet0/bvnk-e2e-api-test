@@ -125,3 +125,77 @@ class TestCurrencyConversion:
                 f"amountIn {quote.amount_in} != {gross * (1 + FEE)} (+/-{tolerance})"
 
         settle_and_verify(client, snapshot, wallets, before, quote, src, dst)
+
+
+@allure.parent_suite("E2E")
+@allure.suite("Quote lifecycle")
+@allure.sub_suite("Status transitions")
+class TestQuoteLifecycle:
+
+    @pytest.mark.positive
+    @pytest.mark.slow
+    @allure.title("Quote moves PENDING -> ACCEPTED/PROCESSING -> PAYMENT_OUT_PROCESSED/SUCCESS")
+    def test_status_transitions(self, client, wallets):
+        with allure.step("Created quote is PENDING with no acceptance date yet"):
+            q = quotes.create_quote(client, Currency.TRX, Currency.USDT, 100,
+                                    wallets[Currency.TRX].id, wallets[Currency.USDT].id)
+            assert (q.quote_status, q.payment_status) == (QuoteStatus.PENDING, PaymentStatus.PENDING)
+            assert q.raw["acceptanceDate"] is None
+
+        with allure.step("Accept and record every status observed until settlement"):
+            accepted = quotes.accept_quote(client, q.uuid)
+            assert (accepted.quote_status, accepted.payment_status) == (QuoteStatus.ACCEPTED, PaymentStatus.PROCESSING)
+            observed = quotes.track_statuses(client, q.uuid)
+            allure.attach(str(observed), "observed statuses")
+
+        with allure.step("Statuses only ever move forward, ending in SUCCESS"):
+            order = [(QuoteStatus.ACCEPTED, PaymentStatus.PROCESSING),
+                     (QuoteStatus.PAYMENT_OUT_PROCESSED, PaymentStatus.SUCCESS)]
+            assert observed[-1] == order[-1]
+            assert set(observed) <= set(order), f"unexpected status seen: {observed}"
+            assert [order.index(s) for s in observed] == sorted(order.index(s) for s in observed)
+
+        with allure.step("Acceptance timestamps are coherent and the final state is stable"):
+            final = quotes.get_quote(client, q.uuid)
+            assert (final.quote_status, final.payment_status) == order[-1]
+            raw = final.raw
+            assert raw["dateCreated"] <= raw["acceptanceDate"] <= raw["acceptanceExpiryDate"]
+
+
+@allure.parent_suite("E2E")
+@allure.suite("Quote lifecycle")
+@allure.sub_suite("Concurrency")
+class TestConcurrentAcceptance:
+
+    @pytest.mark.negative
+    @pytest.mark.slow
+    @allure.title("Accepting one quote from {workers} concurrent clients executes the trade exactly once")
+    @pytest.mark.parametrize("workers", [config.CONCURRENT_ACCEPT_WORKERS])
+    def test_concurrent_accept_executes_once(self, client, wallets, snapshot, workers):
+        src, dst, amount = Currency.TRX, Currency.USDT, Decimal(100)
+        before = snapshot()
+        q = quotes.create_quote(client, src, dst, amount, wallets[src].id, wallets[dst].id)
+
+        barrier = threading.Barrier(workers)
+
+        def accept():
+            c = ApiClient(token=client.token)  # one session per thread
+            barrier.wait()  # release all requests together
+            return quotes.accept_quote_raw(c, q.uuid).status_code
+
+        with allure.step(f"Fire {workers} simultaneous accept requests"):
+            with ThreadPoolExecutor(workers) as pool:
+                codes = [f.result() for f in [pool.submit(accept) for _ in range(workers)]]
+            allure.attach(str(codes), "status codes")
+
+        with allure.step("Exactly one accept succeeds (200), the rest are rejected (400)"):
+            assert codes.count(HTTPStatus.OK) == 1, f"expected exactly one 200, got {codes}"
+            assert all(c == HTTPStatus.BAD_REQUEST for c in codes if c != HTTPStatus.OK), codes
+
+        with allure.step("Funds moved exactly once"):
+            assert quotes.wait_for_settlement(client, q.uuid).payment_status == PaymentStatus.SUCCESS
+            after = snapshot()
+            assert within(before[src] - after[src], amount, quantum(wallets[src].precision)), \
+                "source debited more or less than once"
+            assert within(after[dst] - before[dst], q.amount_out, quantum(wallets[dst].precision)), \
+                "target credited more or less than once"
