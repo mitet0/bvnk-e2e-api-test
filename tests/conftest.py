@@ -1,0 +1,60 @@
+import io
+import logging
+
+import allure
+import pytest
+
+from bvnk import config
+from bvnk.api import auth
+from bvnk.api.wallets import balances, list_wallets
+from bvnk.client import ApiClient
+
+logging.getLogger("urllib3").setLevel(logging.WARNING)  # connection chatter drowns out our own logs
+
+
+@pytest.fixture(scope="session")
+def token():
+    return config.PRESET_TOKEN or auth.init_account(ApiClient())
+
+
+@pytest.fixture
+def client(token):
+    return ApiClient(token=token)
+
+
+@pytest.fixture
+def anon_client():
+    return ApiClient()
+
+
+@pytest.fixture
+def snapshot(client):
+    """Callable returning a fresh currency->balance map."""
+    return lambda: balances(client)
+
+
+@pytest.fixture
+def wallets(client):
+    """currency code -> Wallet"""
+    return {w.currency: w for w in list_wallets(client)}
+
+
+@pytest.fixture(autouse=True)
+def test_log(request):
+    """Log START/END markers and attach this test's log in the Allure "Tear down" section.
+
+    allure-pytest's own capture is disabled (--allure-no-capture in pytest.ini) so the log is not
+    attached twice; this fixture's teardown is what puts it under Tear down.
+    """
+    buffer = io.StringIO()
+    handler = logging.StreamHandler(buffer)
+    handler.setFormatter(logging.Formatter("%(asctime)s.%(msecs)03d %(levelname)-5s %(name)-14s %(message)s",
+                                           "%H:%M:%S"))
+    root = logging.getLogger()
+    root.addHandler(handler)
+    log = logging.getLogger("bvnk.test")
+    log.info("=== START %s", request.node.nodeid)
+    yield
+    log.info("=== END   %s", request.node.nodeid)
+    root.removeHandler(handler)
+    allure.attach(buffer.getvalue(), "test log", allure.attachment_type.TEXT)
