@@ -23,6 +23,9 @@ FEE = config.SERVICE_FEE_RATE
 def assert_new_quote(quote, src, dst, fee_base: Decimal, fee_base_error: Decimal = Decimal(0)):
     """Checks common to every freshly created quote, whichever amount mode requested it.
 
+    The fee semantics asserted here (0.01% of the source amount, deducted from amountIn) are observed
+    simulator behaviour; the brief and BVNK docs only state "0.01% service fee".
+
     fee_base is the amount the 0.01% service fee is charged on (amountIn, or amountOut * price);
     fee_base_error is how far price rounding can move it (0 when fee_base is an exact request amount).
     """

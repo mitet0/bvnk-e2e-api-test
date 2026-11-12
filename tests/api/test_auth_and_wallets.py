@@ -67,11 +67,11 @@ class TestWallets:
         assert wallets_api.list_wallets_raw(client, params={"offset": len(wallets), "max_count": 10}).json() == []
 
     @pytest.mark.negative
-    @allure.title("Get unknown wallet returns 404")
+    @allure.title("Get unknown wallet is rejected (404)")
     def test_get_unknown_wallet_404(self, client):
         assert wallets_api.get_wallet_raw(client, NON_EXISTENT_WALLET_ID).status_code == HTTPStatus.NOT_FOUND
 
     @pytest.mark.negative
-    @allure.title("Get wallet with a non-numeric id returns 422")
+    @allure.title("Get wallet with a non-numeric id is rejected (422)")
     def test_get_wallet_non_numeric_id_422(self, client):
         assert wallets_api.get_wallet_raw(client, "abc").status_code == HTTPStatus.UNPROCESSABLE_ENTITY

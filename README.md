@@ -40,7 +40,7 @@ Config via environment variables, all optional (see `.env.example`; copy it to `
 
 ## Findings about the simulator
 - Accept (`PUT /api/v1/quote/accept/{uuid}`) is asynchronous: `paymentStatus` goes PROCESSING -> SUCCESS in ~6s and balances only move then, so tests poll (`quotes.wait_for_settlement`).
-- Fee = 0.01% of the *source* amount. `amountIn` mode: `amountOut = amountIn * price * (1 - fee)`. `amountOut` mode (exact output): `price` is source-per-target and `amountIn = amountOut * price * (1 + fee)`; `price` is rounded to 8dp, so tolerances are derived from that.
+- Fee semantics are **observed, not documented**: the brief and docs.bvnk.com only state a 0.01% service fee, not what it is charged on or whether it is deducted from or added to `amountIn`. The tests encode what the simulator does, so a failure means its behaviour changed, not that a documented rule was broken. Observed: fee = 0.01% of the *source* amount. `amountIn` mode: `amountOut = amountIn * price * (1 - fee)`. `amountOut` mode (exact output): `price` is source-per-target and `amountIn = amountOut * price * (1 + fee)`; `price` is rounded to 8dp, so tolerances are derived from that.
 - Statuses: `PENDING/PENDING` -> `ACCEPTED/PROCESSING` -> `PAYMENT_OUT_PROCESSED/SUCCESS`. `paymentReceiptDate` stays null and `lastUpdated` does not advance on settlement, so these are not asserted.
 - Concurrent accepts of one quote: exactly one 200, others 400, funds move once.
 - Quote creation needs `fromWallet`/`toWallet` ids (from `/api/wallet`), `amountIn` xor `amountOut`; insufficient funds -> 412.

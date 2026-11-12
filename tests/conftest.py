@@ -1,5 +1,6 @@
 import io
 import logging
+from contextlib import contextmanager
 
 import allure
 import pytest
@@ -39,6 +40,22 @@ def snapshot(client):
 def wallets(client):
     """currency code -> Wallet"""
     return {w.currency: w for w in list_wallets(client)}
+
+
+@pytest.fixture
+def wallets_unchanged(client):
+    """Context manager for negative tests: balance and available funds of every wallet must be
+    identical after the block, i.e. a rejected request must not move or hold funds."""
+    def state():
+        return {w.currency: (w.balance, w.available) for w in list_wallets(client)}
+
+    @contextmanager
+    def _check():
+        before = state()
+        yield
+        with allure.step("Verify wallets are unchanged"):
+            assert state() == before, "wallets changed after a rejected request"
+    return _check
 
 
 @pytest.fixture(autouse=True)
