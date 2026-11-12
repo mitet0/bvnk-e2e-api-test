@@ -24,7 +24,8 @@ class ApiClient:
         self.token = token
         self.session = requests.Session()
 
-    def request(self, method: str, path: str, *, auth: bool = True, token: Optional[str] = None, **kw) -> requests.Response:
+    def request(self, method: str, path: str, *, auth: bool = True, token: Optional[str] = None,
+                **kw) -> requests.Response:
         headers = kw.pop("headers", {})
         tok = token if token is not None else self.token
         if auth and tok is not None:

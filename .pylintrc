@@ -1,0 +1,16 @@
+[MAIN]
+ignore=.venv,reports
+
+[FORMAT]
+max-line-length=120
+
+[MESSAGES CONTROL]
+# Test style: descriptive names via @allure.title, pytest fixtures injected by argument name.
+disable=missing-module-docstring,
+        missing-class-docstring,
+        missing-function-docstring,
+        redefined-outer-name,
+        too-many-arguments,
+        too-many-positional-arguments,
+        too-few-public-methods,
+        too-many-instance-attributes
