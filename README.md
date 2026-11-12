@@ -1,5 +1,7 @@
 # BVNK E2E API test framework
 
+[![Lint](https://github.com/mitet0/bvnk-e2e-api-test/actions/workflows/lint.yml/badge.svg?branch=main)](https://github.com/mitet0/bvnk-e2e-api-test/actions/workflows/lint.yml)
+
 pytest + requests suite for the BVNK simulator (currency quotes/trades). Requires **Python 3.11+**. Reports: a self-contained HTML report plus Allure results.
 
 ## Run
