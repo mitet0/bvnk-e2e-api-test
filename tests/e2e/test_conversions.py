@@ -1,26 +1,23 @@
 """E2E trades: precondition balances -> quote -> accept -> settle -> verify.
 
-The three trades required by the brief; scenarios move to a YAML table in a later commit.
+Scenarios are table-driven from data/trade_scenarios.yaml.
 """
+from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
+import threading
 
 import allure
 import pytest
 
-from bvnk import config
+from bvnk import config, scenarios
 from bvnk.api import quotes
-from bvnk.constants import PaymentStatus, QuoteStatus
+from bvnk.client import ApiClient
+from bvnk.constants import Currency, HTTPStatus, PaymentStatus, QuoteStatus
 from bvnk.tolerance import price_rounding_error, quantum, warn_if_not_discriminating, within
 
 pytestmark = [pytest.mark.e2e, allure.epic("Trading"), allure.feature("Currency conversion")]
 
 FEE = config.SERVICE_FEE_RATE
-
-MANDATORY_TRADES = [
-    pytest.param("ETH", "TRX", Decimal(1), id="1-ETH-to-TRX", marks=pytest.mark.mandatory),
-    pytest.param("TRX", "USDT", Decimal(420), id="420-TRX-to-USDT", marks=pytest.mark.mandatory),
-    pytest.param("TRX", "ETH", Decimal(987), id="987-TRX-to-ETH", marks=pytest.mark.mandatory),
-]
 
 
 def assert_new_quote(quote, src, dst, fee_base: Decimal, fee_base_error: Decimal = Decimal(0)):
@@ -82,7 +79,7 @@ class TestCurrencyConversion:
 
     @pytest.mark.positive
     @pytest.mark.slow  # waits ~6s for asynchronous settlement
-    @pytest.mark.parametrize("src,dst,amount", MANDATORY_TRADES)
+    @pytest.mark.parametrize("src,dst,amount", scenarios.load("amount_in"))
     @allure.title("Sell {amount} {src} for {dst}")
     def test_convert(self, request, client, wallets, snapshot, src, dst, amount):
         before = preconditions(request, wallets, snapshot, src, dst, amount)
@@ -99,5 +96,32 @@ class TestCurrencyConversion:
             warn_if_not_discriminating("amountOut", tolerance, gross * FEE)
             assert within(quote.amount_out, gross * (1 - FEE), tolerance), \
                 f"amountOut {quote.amount_out} != {gross * (1 - FEE)} (+/-{tolerance}): fee not applied as 0.01%?"
+
+        settle_and_verify(client, snapshot, wallets, before, quote, src, dst)
+
+    @pytest.mark.positive
+    @pytest.mark.slow
+    @pytest.mark.parametrize("src,dst,amount", scenarios.load("amount_out"))
+    @allure.title("Receive exactly {amount} {dst} by selling {src}")
+    def test_convert_exact_output(self, request, client, wallets, snapshot, src, dst, amount):
+        # The source amount is unknown until quoted, so the funding check happens after the quote is created.
+        before = preconditions(request, wallets, snapshot, src, dst, Decimal(0))
+
+        with allure.step("Create quote by requested output amount and validate it"):
+            quote = quotes.create_quote(client, src, dst, None, wallets[src].id, wallets[dst].id,
+                                        amount_out=amount)
+            # In this mode price is quoted as source-per-target and the fee is added on top:
+            #   gross = amountOut * price;  fee = gross * 0.01%;  amountIn = gross + fee
+            gross = amount * quote.price
+            assert_new_quote(quote, src, dst, fee_base=gross,
+                             fee_base_error=amount * config.PRICE_QUANTUM / 2)
+            assert quote.amount_out == amount, "requested output must be quoted exactly"
+            assert before[src] >= quote.amount_in, f"insufficient {src}: {before[src]} < {quote.amount_in}"
+
+        with allure.step("Validate amountIn = amountOut * price * (1 + fee)"):
+            tolerance = price_rounding_error(amount, quote.amount_in)
+            warn_if_not_discriminating("amountIn", tolerance, gross * FEE)
+            assert within(quote.amount_in, gross * (1 + FEE), tolerance), \
+                f"amountIn {quote.amount_in} != {gross * (1 + FEE)} (+/-{tolerance})"
 
         settle_and_verify(client, snapshot, wallets, before, quote, src, dst)

@@ -1,0 +1,22 @@
+# Table-driven trade scenarios. Add a row to add a test; no Python changes needed.
+#   id       unique readable id (used in the report)
+#   from/to  currency codes
+#   mode     amount_in  -> "sell <amount> of <from>"           (amountIn in the request)
+#            amount_out -> "receive exactly <amount> of <to>"  (amountOut in the request)
+#   amount   decimal, quoted to avoid float parsing
+#   tags     extra pytest markers / Allure tags (e.g. mandatory)
+scenarios:
+  # --- mandatory brief scenarios
+  - {id: 1-ETH-to-TRX,    from: ETH,  to: TRX,  mode: amount_in, amount: "1",   tags: [mandatory]}
+  - {id: 420-TRX-to-USDT, from: TRX,  to: USDT, mode: amount_in, amount: "420", tags: [mandatory]}
+  - {id: 987-TRX-to-ETH,  from: TRX,  to: ETH,  mode: amount_in, amount: "987", tags: [mandatory]}
+
+  # --- remaining ordered pairs (the 6 pairs of ETH/TRX/USDT are now all covered)
+  - {id: 0.1-ETH-to-USDT, from: ETH,  to: USDT, mode: amount_in, amount: "0.1"}
+  - {id: 100-USDT-to-ETH, from: USDT, to: ETH,  mode: amount_in, amount: "100"}
+  - {id: 100-USDT-to-TRX, from: USDT, to: TRX,  mode: amount_in, amount: "100"}
+
+  # --- exact-output mode
+  - {id: get-50-USDT-from-TRX,   from: TRX,  to: USDT, mode: amount_out, amount: "50"}
+  - {id: get-1000-TRX-from-ETH,  from: ETH,  to: TRX,  mode: amount_out, amount: "1000"}
+  - {id: get-0.01-ETH-from-USDT, from: USDT, to: ETH,  mode: amount_out, amount: "0.01"}
