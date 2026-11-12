@@ -49,7 +49,7 @@ Tests target the simulator's contract only. It mimics the legacy Quote API (reti
 ## Design notes
 - Rates fluctuate, so assertions use the rate reported by the quote itself, never a hard-coded one.
 - Each test is independent and compares before/after wallet snapshots (deltas), so it does not depend on default balances beyond having sufficient funds (non-mandatory scenarios skip if underfunded; **mandatory scenarios fail**, so they can never silently skip).
-- Token is created once per session via `/init`, so all tests share one account and its balances. Tests are therefore **not safe to run in parallel** (e.g. `pytest-xdist`) or concurrently against the same `BVNK_TOKEN`: the balance-delta assertions would interfere.
+- A token is created per test via `/init`; each call returns a fresh funded account (own wallets and balances), so tests are isolated and safe to run in parallel (`pytest -n 4`, pytest-xdist). Setting `BVNK_TOKEN` forces one shared account for every test, which is **not** parallel-safe because balance-delta assertions would interfere.
 - Tolerances are derived from the rounding the API applies (`bvnk/tolerance.py`): balances to the currency's `quantityPrecision`, prices to 8dp. A blanket tolerance would be larger than the 0.01% fee on small-price pairs (e.g. TRX->ETH) and hide a wrong fee. If a scenario is so small that rounding could mask the fee, a warning is logged (`warn_if_not_discriminating`).
 - Rejection tests assert exact status codes observed on the simulator (expired quote -> 412 and state `EXPIRED`, re-accept -> 400), not just "any 4xx/5xx".
 

@@ -12,8 +12,10 @@ from bvnk.client import ApiClient
 logging.getLogger("urllib3").setLevel(logging.WARNING)  # connection chatter drowns out our own logs
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def token():
+    """Bearer token for this test. Each /init call creates a fresh funded account, so tests never
+    share balances and can run in parallel. BVNK_TOKEN overrides this with one shared account."""
     return config.PRESET_TOKEN or auth.init_account(ApiClient())
 
 
