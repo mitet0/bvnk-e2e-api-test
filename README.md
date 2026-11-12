@@ -16,7 +16,10 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 - `reports/allure-results` – Allure data; view with `allure serve reports/allure-results` (needs the Allure CLI, e.g. `brew install allure`). Each test has steps, HTTP request/response attachments and a `test log` attachment in the **Tear down** section (attached by the autouse `test_log` fixture in `tests/conftest.py`; allure-pytest's own capture is off via `--allure-no-capture` so it isn't duplicated).
 - `reports/test.log` – full DEBUG log.
 
-Config via env vars (see `.env.example`): `BVNK_BASE_URL`, `BVNK_TOKEN`, `BVNK_TIMEOUT`.
+Config via environment variables, all optional (see `.env.example`; copy it to `.env` and run `set -a; source .env; set +a`, as `.env` files are not loaded automatically):
+- `BVNK_BASE_URL` – simulator URL (default `https://qa-simulator.test.bvnk.com`)
+- `BVNK_TOKEN` – reuse an existing bearer token instead of calling `/init`
+- `BVNK_TIMEOUT` – per-request timeout in seconds (default `15`)
 
 ## Logging / debugging
 - Every run writes `reports/test.log` (DEBUG; overwritten each run) and each test's log is attached to its Allure result under Tear down.
